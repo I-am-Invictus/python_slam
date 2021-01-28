@@ -7,7 +7,8 @@ class slamSolver:
         self.maxLandmarks = maxLandmarks
 
         # check if weights are specific per dim.. otherwise assign them to all dims
-        
+        # W > 1 small error
+        # 0 < W < 1 larger error
         if (type(1.0)==type(oWeights) or type(1)==type(oWeights)):
             self.oW = np.empty(self.dof); self.oW.fill(oWeights)
         else:
@@ -56,7 +57,7 @@ class slamSolver:
                     xi[columns[0,d]] += 1 * posMat[time_step,d]
 
             # Handle node to node relations
-            if time_step != timeSteps-1:
+            if time_step < timeSteps-1:
                 for d in range(self.dof):
                     # Outlink to node n+1 from node n
                     omega[columns[0,d],columns[0,d]] += self.oW[d]
@@ -76,12 +77,19 @@ class slamSolver:
             lcolumns = np.arange(self.dof, dtype=int) + ((timeSteps-1) * self.dof)
             for li in range(landmarksMat.shape[1]):
                 # Check to see if there is actually a connection...
-                if landmarksMat[time_step,li,0] == 0:
-                    continue
                 lcolumns = lcolumns + self.dof
+                if landmarksMat[time_step,li,0] == 0 and time_step == timeSteps-1:
+                    # I still need to do something here...
+                    # Assign the diagnol to 1 if relationship to node point is none
+                    for di in range(self.dof):
+                        omega[lcolumns[di],lcolumns[di]] = 1
+                    continue
+                elif landmarksMat[time_step,li,0] == 0:
+                    continue
 
                 for di in range(self.dof):
-                    if self.mW[di] == 0: # Set weight to 0 if no reliable relationship
+                    # This handles if the sensor can't get rotiation information or something
+                    if self.mW[di] == 0: # Check if weight is zero can't get info
                          omega[lcolumns[di],lcolumns[di]] = 1
                     else:
                         # outlink of node n to landmark n
@@ -98,7 +106,6 @@ class slamSolver:
                         xi[columns[0,di]] -= landmarksMat[time_step,li,di+1] * self.mW[di]
                         # landmakrs will ways have nodes as inlinks
                         xi[lcolumns[di]] += landmarksMat[time_step,li,di+1] * self.mW[di]
-        
         # Lets actually slam it...
         X = np.linalg.solve(omega,xi)
         X = np.reshape(X,(-1,self.dof))
@@ -106,8 +113,8 @@ class slamSolver:
         return X
 
 if __name__ == "__main__":
-    slamSolverObject = slamSolver(3,50,10,.5,2)
-
+    slamSolverObject = slamSolver(2,50,10,.5,2.0)
+    '''
     pos = np.array([[3,4,0],[2.4,-2.7,47],[3.2,2.5,-42],[4.3,-1.6, -46]])
     
 
@@ -115,6 +122,10 @@ if __name__ == "__main__":
                 [[1,1,2,45],[1,5,4,-90]],
                 [[0,0,0,0],[1,2,2,-45]],
                 [[0,0,0,0],[0,0,0,0]]])
+    '''
+
+    pos = np.array([[3,7],[4.5,-1.5],[2,-3]])
+    L = np.array([[[0,0,0]],[[1,-4,-3]],[[1,-6,1]]])
 
     postionEstimates = slamSolverObject.slam(pos,L)
     print(postionEstimates)
